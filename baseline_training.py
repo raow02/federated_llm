@@ -49,13 +49,6 @@ def main():
     # Load tokenizer.
     tokenizer = AutoTokenizer.from_pretrained(args.base_model)
 
-    # Load the base model (un-fine-tuned baseline) and save it.
-    print("Loading base model...")
-    base_model = AutoModelForCausalLM.from_pretrained(args.base_model, device_map="auto", load_in_8bit=True)
-    baseline_dir = os.path.join(args.output_dir, "baseline_unfinetuned")
-    base_model.save_pretrained(baseline_dir)
-    print(f"Saved baseline un-fine-tuned model at {baseline_dir}")
-
     # Define LoRA configuration.
     lora_config = LoraConfig(
         r=8,               # Rank of the LoRA update matrices.
