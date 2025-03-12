@@ -42,6 +42,7 @@ def main():
     parser.add_argument("--epochs", type=int, default=3, help="Number of training epochs per domain.")
     parser.add_argument("--lr", type=float, default=3e-4, help="Learning rate for training.")
     parser.add_argument("--batch_size", type=int, default=1, help="Per-device batch size.")
+    parser.add_argument("--gradient_accumulation_steps", type=int, default=4, help="gradient accumulation steps")
     args = parser.parse_args()
 
     # Create output directory if not exists
@@ -86,17 +87,18 @@ def main():
 
         # Define training arguments.
         training_args = TrainingArguments(
-            output_dir=os.path.join(args.output_dir, f"{domain}_lora"),
-            per_device_train_batch_size=args.batch_size,
-            num_train_epochs=args.epochs,
-            learning_rate=args.lr,
-            logging_steps=10,
-            save_steps=50,
-            save_total_limit=2,
-            fp16=True,
-            optim="adamw_torch",
-            report_to="none"  # Disable reporting to third-party services.
-        )
+                        output_dir=os.path.join(args.output_dir, f"{domain}_lora"),
+                        per_device_train_batch_size=args.batch_size,
+                        gradient_accumulation_steps=args.gradient_accumulation_steps,
+                        num_train_epochs=args.epochs,
+                        learning_rate=args.lr,
+                        logging_steps=10,
+                        save_steps=50,
+                        save_total_limit=2,
+                        fp16=True,
+                        optim="adamw_torch",
+                        report_to="none"  # Disable reporting to third-party services.
+                    )
 
         # Initialize the Trainer.
         trainer = Trainer(
