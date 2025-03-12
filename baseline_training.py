@@ -28,6 +28,7 @@ class CustomDataset(torch.utils.data.Dataset):
         tokenized = self.tokenizer(text, truncation=True, max_length=self.max_length, return_tensors="pt")
         # Remove batch dimension.
         tokenized = {k: v.squeeze(0) for k, v in tokenized.items()}
+        tokenized["labels"] = tokenized["input_ids"].clone()
         return tokenized
 
 def main():
