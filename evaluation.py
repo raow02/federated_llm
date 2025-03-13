@@ -106,7 +106,12 @@ def main():
     parser.add_argument("--device", type=str, default="cuda", help="Device to run generation on (e.g., cuda or cpu).")
     parser.add_argument("--api_key", type=str, required=True,
                         help="OpenAI API key to access GPT-4 evaluation.")
+    parser.add_argument("--save_dir", type=str, default=".",
+                        help="Directory to save evaluation results. Default is current working directory.")
     args = parser.parse_args()
+
+    # Create the save directory if it doesn't exist
+    os.makedirs(args.save_dir, exist_ok=True)
 
     # Set up OpenAI client with the new API format
     client = openai.OpenAI(api_key=args.api_key)
@@ -218,14 +223,19 @@ def main():
                 eval_results[ft_domain][test_domain] = (None, None)
                 print(f"No valid evaluations for Fine-Tuned '{ft_domain}' on test domain '{test_domain}'.")
 
-    # Save all evaluation results locally
-    output_file = "evaluation_results.json"
+    # Save the evaluation results as JSON
+    output_file = os.path.join(args.save_dir, "evaluation_results.json")
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(eval_results, f, indent=4)
     print(f"\nEvaluation complete! Results saved to {output_file}")
 
     # Convert the nested dictionary into a DataFrame for better visualization
     df = pd.DataFrame.from_dict(eval_results, orient="index")
+
+    # Save DataFrame as CSV
+    csv_file = os.path.join(args.save_dir, "evaluation_results.csv")
+    df.to_csv(csv_file)
+    print(f"Results also saved as CSV to {csv_file}")
 
     # Print the table
     print("\nEvaluation Results Table:")
