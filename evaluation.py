@@ -6,9 +6,10 @@ import random
 import time
 import pandas as pd
 
+import openai
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
-import openai
+from peft import PeftModel
 
 # Define the GPT-4 evaluation function, with updated model name and description in the prompt
 def evaluate_with_gpt4(instruction, response_ft, response_orig):
@@ -144,7 +145,8 @@ def main():
             print(f"Fine-tuned model for domain '{ft_domain}' not found at {model_path}")
             continue
         print(f"\nLoading fine-tuned model for domain: {ft_domain}")
-        ft_model = AutoModelForCausalLM.from_pretrained(model_path, device_map="auto")
+        base_model_ft = AutoModelForCausalLM.from_pretrained(args.base_model, device_map="auto")
+        ft_model = PeftModel.from_pretrained(base_model_ft, model_path)
         ft_model.eval()
 
         # For each test domain
