@@ -104,8 +104,6 @@ def main():
     parser.add_argument("--device", type=str, default="cuda", help="Device to run generation on (e.g., cuda or cpu).")
     parser.add_argument("--api_key", type=str, required=True,
                         help="OpenAI API key to access GPT-4 evaluation.")
-    parser.add_argument("--offload_folder", type=str, default="offload_folder",
-                        help="Folder for disk offload of model parameters.")
     args = parser.parse_args()
 
     # Set OpenAI API key
@@ -119,7 +117,7 @@ def main():
     original_model = AutoModelForCausalLM.from_pretrained(
         args.base_model,
         device_map="auto",
-        offload_folder=args.offload_folder
+        load_in_8bit=True,
     )
     original_model.eval()
 
@@ -154,7 +152,7 @@ def main():
         base_model_ft = AutoModelForCausalLM.from_pretrained(
             args.base_model,
             device_map="auto",
-            offload_folder=args.offload_folder
+            load_in_8bit=True,
         )
         ft_model = PeftModel.from_pretrained(base_model_ft, model_path)
         ft_model.eval()
