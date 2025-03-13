@@ -96,7 +96,7 @@ def main():
     parser.add_argument("--data_dir", type=str, default="data",
                         help="Directory containing the global test JSON file (global_test.json).")
     parser.add_argument("--domain", type=str, nargs='+', default=["brainstorming", "classification", "closed_qa", "creative_writing", "general_qa", "information_extraction", "open_qa", "summarization"],
-                    help="List of domain names corresponding to the fine-tuned models and test sample categories.")
+                        help="List of domain names corresponding to the fine-tuned models and test sample categories.")
     parser.add_argument("--n_eval_repeat", type=int, default=3,
                         help="Number of times to repeat GPT-4 evaluation per sample to average out randomness.")
     parser.add_argument("--max_test_samples", type=int, default=10,
@@ -104,6 +104,8 @@ def main():
     parser.add_argument("--device", type=str, default="cuda", help="Device to run generation on (e.g., cuda or cpu).")
     parser.add_argument("--api_key", type=str, required=True,
                         help="OpenAI API key to access GPT-4 evaluation.")
+    parser.add_argument("--offload_folder", type=str, default="offload_folder",
+                        help="Folder for disk offload of model parameters.")
     args = parser.parse_args()
 
     # Set OpenAI API key
@@ -114,7 +116,11 @@ def main():
 
     # Load original model (used to generate the original responses)
     print("Loading original model...")
-    original_model = AutoModelForCausalLM.from_pretrained(args.base_model, device_map="auto")
+    original_model = AutoModelForCausalLM.from_pretrained(
+        args.base_model,
+        device_map="auto",
+        offload_folder=args.offload_folder
+    )
     original_model.eval()
 
     # Load global test data
@@ -145,7 +151,11 @@ def main():
             print(f"Fine-tuned model for domain '{ft_domain}' not found at {model_path}")
             continue
         print(f"\nLoading fine-tuned model for domain: {ft_domain}")
-        base_model_ft = AutoModelForCausalLM.from_pretrained(args.base_model, device_map="auto")
+        base_model_ft = AutoModelForCausalLM.from_pretrained(
+            args.base_model,
+            device_map="auto",
+            offload_folder=args.offload_folder
+        )
         ft_model = PeftModel.from_pretrained(base_model_ft, model_path)
         ft_model.eval()
 
