@@ -106,7 +106,7 @@ def main():
     args = parser.parse_args()
 
     # Set OpenAI API key
-    openai.api_key = args.openai_api_key
+    openai.api_key = args.api_key
 
     # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.base_model)
@@ -114,7 +114,6 @@ def main():
     # Load original model (used to generate the original responses)
     print("Loading original model...")
     original_model = AutoModelForCausalLM.from_pretrained(args.base_model, device_map="auto")
-    original_model.to(args.device)
     original_model.eval()
 
     # Load global test data
@@ -146,7 +145,6 @@ def main():
             continue
         print(f"\nLoading fine-tuned model for domain: {ft_domain}")
         ft_model = AutoModelForCausalLM.from_pretrained(model_path, device_map="auto")
-        ft_model.to(args.device)
         ft_model.eval()
 
         # For each test domain
