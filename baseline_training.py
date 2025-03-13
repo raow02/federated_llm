@@ -1,6 +1,5 @@
 import argparse
 import os
-import glob
 import json
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, TrainingArguments, Trainer
@@ -23,7 +22,6 @@ class CustomDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         sample = self.data[idx]
         # Concatenate instruction, context, and response to form the training text.
-        # Adjust the format below as needed.
         text = f"Instruction: {sample.get('instruction', '')}\nContext: {sample.get('context', '')}\nResponse: {sample.get('response', '')}"
         tokenized = self.tokenizer(text, truncation=True, max_length=self.max_length, return_tensors="pt")
         # Remove batch dimension.
@@ -32,20 +30,22 @@ class CustomDataset(torch.utils.data.Dataset):
         return tokenized
 
 def main():
-    parser = argparse.ArgumentParser(description="Federated LLM fine-tuning with LoRA on multiple domain-specific datasets.")
+    parser = argparse.ArgumentParser(description="Federated LLM fine-tuning with LoRA on specified domain-specific datasets.")
     parser.add_argument("--base_model", type=str, default="NousResearch/Llama-2-7b-hf",
                         help="Name or path of the base Llama 7B model.")
     parser.add_argument("--data_dir", type=str, default="data",
                         help="Directory containing training JSON files named as local_training_{domain}.json.")
+    parser.add_argument("--domain", type=str, nargs='+', required=True,
+                        help="List of domains to train on. For each domain, a file named local_training_{domain}.json must exist.")
     parser.add_argument("--output_dir", type=str, default="output_models",
                         help="Directory to save the fine-tuned LoRA models and baseline model.")
     parser.add_argument("--epochs", type=int, default=3, help="Number of training epochs per domain.")
     parser.add_argument("--lr", type=float, default=3e-4, help="Learning rate for training.")
     parser.add_argument("--batch_size", type=int, default=1, help="Per-device batch size.")
-    parser.add_argument("--gradient_accumulation_steps", type=int, default=4, help="gradient accumulation steps")
+    parser.add_argument("--gradient_accumulation_steps", type=int, default=4, help="Gradient accumulation steps.")
     args = parser.parse_args()
 
-    # Create output directory if not exists
+    # Create output directory if not exists.
     os.makedirs(args.output_dir, exist_ok=True)
 
     # Load tokenizer.
@@ -61,19 +61,13 @@ def main():
         task_type="CAUSAL_LM"
     )
 
-    # Search for all files matching the pattern local_training_{domain}.json in data_dir.
-    pattern = os.path.join(args.data_dir, "local_training_*.json")
-    files = glob.glob(pattern)
-    if not files:
-        print(f"No training files found with pattern: {pattern}")
-        return
+    # Process each specified domain.
+    for domain in args.domain:
+        file_path = os.path.join(args.data_dir, f"local_training_{domain}.json")
+        if not os.path.exists(file_path):
+            print(f"Training file for domain '{domain}' not found at path: {file_path}")
+            continue
 
-    # Process each domain-specific file.
-    for file_path in files:
-        # Extract domain name from filename.
-        basename = os.path.basename(file_path)
-        # Expecting filename format: local_training_{domain}.json
-        domain = basename.replace("local_training_", "").replace(".json", "")
         print(f"\nStarting fine-tuning for domain: {domain}")
 
         # Load domain-specific dataset.
@@ -87,18 +81,18 @@ def main():
 
         # Define training arguments.
         training_args = TrainingArguments(
-                        output_dir=os.path.join(args.output_dir, f"{domain}_lora"),
-                        per_device_train_batch_size=args.batch_size,
-                        gradient_accumulation_steps=args.gradient_accumulation_steps,
-                        num_train_epochs=args.epochs,
-                        learning_rate=args.lr,
-                        logging_steps=10,
-                        save_steps=50,
-                        save_total_limit=2,
-                        fp16=True,
-                        optim="adamw_torch",
-                        report_to="none"  # Disable reporting to third-party services.
-                    )
+            output_dir=os.path.join(args.output_dir, f"{domain}_lora"),
+            per_device_train_batch_size=args.batch_size,
+            gradient_accumulation_steps=args.gradient_accumulation_steps,
+            num_train_epochs=args.epochs,
+            learning_rate=args.lr,
+            logging_steps=10,
+            save_steps=50,
+            save_total_limit=2,
+            fp16=True,
+            optim="adamw_torch",
+            report_to="none"  # Disable reporting to third-party services.
+        )
 
         # Initialize the Trainer.
         trainer = Trainer(
