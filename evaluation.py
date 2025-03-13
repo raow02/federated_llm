@@ -4,6 +4,7 @@ import json
 import re
 import random
 import time
+import pandas as pd
 
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
@@ -209,6 +210,13 @@ def main():
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(eval_results, f, indent=4)
     print(f"\nEvaluation complete! Results saved to {output_file}")
+
+    # Convert the nested dictionary into a DataFrame for better visualization
+    df = pd.DataFrame.from_dict(eval_results, orient="index")
+
+    # Print the table
+    print("\nEvaluation Results Table:")
+    print(df)
 
 if __name__ == "__main__":
     main()
