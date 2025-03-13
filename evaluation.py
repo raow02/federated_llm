@@ -76,7 +76,7 @@ def parse_scores(gpt4_result):
         print("Error parsing GPT-4 result:", e)
         return None, None
 
-def generate_response(model, tokenizer, instruction, max_length=256, device="cuda"):
+def generate_response(model, tokenizer, instruction, max_length=512, device="cuda"):
     """
     Generate a response using the specified model and tokenizer.
     """
@@ -86,6 +86,7 @@ def generate_response(model, tokenizer, instruction, max_length=256, device="cud
         output = model.generate(**inputs, max_length=max_length)
     response = tokenizer.decode(output[0], skip_special_tokens=True)
     return response
+
 
 def main():
     parser = argparse.ArgumentParser(description="Evaluate Fine-Tuned models vs. Original model using GPT-4 auto-evaluation.")
