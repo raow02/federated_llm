@@ -11,45 +11,56 @@ import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from peft import PeftModel
 
-# Define the GPT-4 evaluation function, with updated model name and description in the prompt
-def evaluate_with_gpt4(instruction, response_ft, response_orig, client):
+# Define the GPT-4 evaluation function with an unbiased prompt
+def evaluate_with_gpt4(instruction, context, response_a, response_b, client):
     """
     Use GPT-4 to compare two model responses and return a score pair.
     
     Parameters:
     - instruction: The original instruction text.
-    - response_ft: The response from the Fine-Tuned model.
-    - response_orig: The response from the Original model.
+    - context: Additional context for the instruction.
+    - response_a: The response from Model A.
+    - response_b: The response from Model B.
     - client: The OpenAI client instance.
     
     Returns:
     - The text result returned by GPT-4 in the following format:
-      - Fine-Tuned Model Score: X
-      - Original Model Score: Y
-      - Better Model: [Fine-Tuned / Original / Tie]
+      - Model A Score: X
+      - Model B Score: Y
+      - Better Model: [A / B / Tie]
     """
+    # Build prompt based on whether context is provided
+    if context:
+        instruction_text = f"""Instruction:
+"{instruction}"
+
+Context:
+"{context}" """
+    else:
+        instruction_text = f"""Instruction:
+"{instruction}" """
+        
     prompt = f"""
-You are an expert language model evaluator. Given an instruction, compare two model responses.
+You are an expert language model evaluator. Given an instruction and context, compare two model responses.
 Score each response on a scale from 1 to 10 (10 being the best) based on:
-- Relevance to the instruction
+- Relevance to the instruction and context
 - Coherence and fluency
 - Completeness of the answer
 - Factual correctness
 
-Instruction:
-"{instruction}"
+{instruction_text}
 
-Response from **Fine-Tuned Model**:
-"{response_ft}"
+Response from **Model A**:
+"{response_a}"
 
-Response from **Original Model**:
-"{response_orig}"
+Response from **Model B**:
+"{response_b}"
 
 Now, rate each response from 1 to 10 and state which one is better. Return in this format:
 
-- Fine-Tuned Model Score: X
-- Original Model Score: Y
-- Better Model: [Fine-Tuned / Original / Tie]
+- Model A Score: X
+- Model B Score: Y
+- Better Model: [A / B / Tie]
     """
     try:
         # Call GPT-4 API using the new client format
@@ -67,21 +78,38 @@ Now, rate each response from 1 to 10 and state which one is better. Return in th
 def parse_scores(gpt4_result):
     """
     Parse the score pair from the GPT-4 returned result.
-    Returns (ft_score, orig_score)
+    Returns (model_a_score, model_b_score)
     """
     try:
-        ft_score = int(re.search(r"Fine-Tuned Model Score: (\d+)", gpt4_result).group(1))
-        orig_score = int(re.search(r"Original Model Score: (\d+)", gpt4_result).group(1))
-        return ft_score, orig_score
+        model_a_score = int(re.search(r"Model A Score: (\d+)", gpt4_result).group(1))
+        model_b_score = int(re.search(r"Model B Score: (\d+)", gpt4_result).group(1))
+        return model_a_score, model_b_score
     except Exception as e:
         print("Error parsing GPT-4 result:", e)
         return None, None
 
-def generate_response(model, tokenizer, instruction, max_length=512, device="cuda"):
+def generate_response(model, tokenizer, instruction, context="", max_length=512, device="cuda"):
     """
     Generate a response using the specified model and tokenizer.
+    
+    Parameters:
+    - model: The language model to use for generation
+    - tokenizer: The tokenizer for the model
+    - instruction: The instruction for the model
+    - context: Optional context to provide with the instruction
+    - max_length: Maximum length of the generated response
+    - device: Device to run generation on (cuda or cpu)
+    
+    Returns:
+    - The generated response text
     """
-    inputs = tokenizer(instruction, return_tensors="pt", truncation=True, padding="max_length", max_length=256)
+    # Combine instruction and context if context is provided
+    if context:
+        input_text = f"Instruction: {instruction}\nContext: {context}"
+    else:
+        input_text = instruction
+        
+    inputs = tokenizer(input_text, return_tensors="pt", truncation=True, padding="max_length", max_length=256)
     inputs = {k: v.to(device) for k, v in inputs.items()}
     with torch.no_grad():
         output = model.generate(**inputs, max_length=max_length)
@@ -99,7 +127,7 @@ def main():
                         help="Directory containing the global test JSON file (global_test.json).")
     parser.add_argument("--domain", type=str, nargs='+', default=["brainstorming", "classification", "closed_qa", "creative_writing", "general_qa", "information_extraction", "open_qa", "summarization"],
                         help="List of domain names corresponding to the fine-tuned models and test sample categories.")
-    parser.add_argument("--n_eval_repeat", type=int, default=3,
+    parser.add_argument("--n_eval_repeat", type=int, default=1,
                         help="Number of times to repeat GPT-4 evaluation per sample to average out randomness.")
     parser.add_argument("--max_test_samples", type=int, default=10,
                         help="For quick testing, you can limit the number of test samples per domain (set to -1 to use all).")
@@ -108,6 +136,8 @@ def main():
                         help="OpenAI API key to access GPT-4 evaluation.")
     parser.add_argument("--save_dir", type=str, default=".",
                         help="Directory to save evaluation results. Default is current working directory.")
+    parser.add_argument("--randomize_order", type=bool, default=True,
+                        help="Randomly assign fine-tuned and original models as A or B to reduce bias.")
     args = parser.parse_args()
 
     # Create the save directory if it doesn't exist
@@ -182,37 +212,62 @@ def main():
             # For each test sample
             for sample in samples:
                 instruction = sample.get("instruction", "").strip()
+                # Extract both instruction and context
+                instruction = sample.get("instruction", "").strip()
+                context = sample.get("context", "").strip()
+                
                 # Generate responses for both models
-                response_ft = generate_response(ft_model, tokenizer, instruction, device=args.device)
-                response_orig = generate_response(original_model, tokenizer, instruction, device=args.device)
+                response_ft = generate_response(ft_model, tokenizer, instruction, context, device=args.device)
+                response_orig = generate_response(original_model, tokenizer, instruction, context, device=args.device)
                 
                 # Repeat the evaluation n_eval_repeat times for each sample
                 sample_ft_scores = []
                 sample_orig_scores = []
                 for i in range(args.n_eval_repeat):
                     print(f"Evaluating sample for domain '{test_domain}' (repeat {i+1}/{args.n_eval_repeat})...")
-                    gpt4_result = evaluate_with_gpt4(instruction, response_ft, response_orig, client)
+                    
+                    # Randomize which model is A and which is B to reduce bias
+                    if args.randomize_order and random.random() > 0.5:
+                        # Fine-tuned model is A, original model is B
+                        response_a, response_b = response_ft, response_orig
+                        is_ft_model_a = True
+                    else:
+                        # Original model is A, fine-tuned model is B
+                        response_a, response_b = response_orig, response_ft
+                        is_ft_model_a = False
+                        
+                    gpt4_result = evaluate_with_gpt4(instruction, context, response_a, response_b, client)
                     # If the call fails, wait a few seconds and retry
                     retry_count = 0
                     while gpt4_result is None and retry_count < 3:
                         time.sleep(5)
-                        gpt4_result = evaluate_with_gpt4(instruction, response_ft, response_orig, client)
+                        gpt4_result = evaluate_with_gpt4(instruction, context, response_a, response_b, client)
                         retry_count += 1
                     if gpt4_result is None:
                         print("Skipping this evaluation due to repeated errors.")
                         continue
-                    ft_score, orig_score = parse_scores(gpt4_result)
-                    if ft_score is not None and orig_score is not None:
+                        
+                    model_a_score, model_b_score = parse_scores(gpt4_result)
+                    if model_a_score is not None and model_b_score is not None:
+                        # Map the scores back to ft_model and orig_model based on which was A and which was B
+                        if is_ft_model_a:
+                            ft_score, orig_score = model_a_score, model_b_score
+                        else:
+                            ft_score, orig_score = model_b_score, model_a_score
+                        
                         sample_ft_scores.append(ft_score)
                         sample_orig_scores.append(orig_score)
+                        
                     # To avoid frequent requests, wait a bit
                     time.sleep(2)
+                    
                 # If there are successful evaluations for this sample, take the average
                 if sample_ft_scores and sample_orig_scores:
                     avg_ft = sum(sample_ft_scores) / len(sample_ft_scores)
                     avg_orig = sum(sample_orig_scores) / len(sample_orig_scores)
                     ft_scores.append(avg_ft)
                     orig_scores.append(avg_orig)
+                    
             # Compute the overall average score for the (ft_domain, test_domain) combination
             if ft_scores and orig_scores:
                 overall_ft = sum(ft_scores) / len(ft_scores)
