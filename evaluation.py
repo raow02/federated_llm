@@ -10,8 +10,6 @@ import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import openai
 
-openai.api_key = os.getenv("OPENAI_API_KEY", "api-key")
-
 # Define the GPT-4 evaluation function, with updated model name and description in the prompt
 def evaluate_with_gpt4(instruction, response_ft, response_orig):
     """
@@ -103,7 +101,12 @@ def main():
     parser.add_argument("--max_test_samples", type=int, default=10,
                         help="For quick testing, you can limit the number of test samples per domain (set to -1 to use all).")
     parser.add_argument("--device", type=str, default="cuda", help="Device to run generation on (e.g., cuda or cpu).")
+    parser.add_argument("--api_key", type=str, required=True,
+                        help="OpenAI API key to access GPT-4 evaluation.")
     args = parser.parse_args()
+
+    # Set OpenAI API key
+    openai.api_key = args.openai_api_key
 
     # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.base_model)
@@ -123,7 +126,7 @@ def main():
         global_test_data = json.load(f)
 
     # Group the test data by category (each category corresponds to a domain)
-    test_data_by_domain = {domain: [] for domain in args.domains}
+    test_data_by_domain = {domain: [] for domain in args.domain}
     for sample in global_test_data:
         category = sample.get("category", "").strip()
         if category in test_data_by_domain:
@@ -133,10 +136,10 @@ def main():
         print(f"  {domain}: {len(samples)} samples")
 
     # Save the evaluation results in a dictionary, structured as {finetuned_domain: {test_domain: (avg_ft_score, avg_orig_score)}}.
-    eval_results = {ft_domain: {} for ft_domain in args.domains}
+    eval_results = {ft_domain: {} for ft_domain in args.domain}
 
     # For each fine-tuned model (obtained by training on each domain)
-    for ft_domain in args.domains:
+    for ft_domain in args.domain:
         model_path = os.path.join(args.output_dir, f"{ft_domain}_lora")
         if not os.path.exists(model_path):
             print(f"Fine-tuned model for domain '{ft_domain}' not found at {model_path}")
@@ -147,7 +150,7 @@ def main():
         ft_model.eval()
 
         # For each test domain
-        for test_domain in args.domains:
+        for test_domain in args.domain:
             samples = test_data_by_domain.get(test_domain, [])
             if not samples:
                 print(f"No test samples found for domain: {test_domain}")
