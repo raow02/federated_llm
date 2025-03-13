@@ -12,7 +12,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from peft import PeftModel
 
 # Define the GPT-4 evaluation function, with updated model name and description in the prompt
-def evaluate_with_gpt4(instruction, response_ft, response_orig):
+def evaluate_with_gpt4(instruction, response_ft, response_orig, client):
     """
     Use GPT-4 to compare two model responses and return a score pair.
     
@@ -20,6 +20,7 @@ def evaluate_with_gpt4(instruction, response_ft, response_orig):
     - instruction: The original instruction text.
     - response_ft: The response from the Fine-Tuned model.
     - response_orig: The response from the Original model.
+    - client: The OpenAI client instance.
     
     Returns:
     - The text result returned by GPT-4 in the following format:
@@ -51,14 +52,14 @@ Now, rate each response from 1 to 10 and state which one is better. Return in th
 - Better Model: [Fine-Tuned / Original / Tie]
     """
     try:
-        # Call GPT-4 API
-        response = openai.ChatCompletion.create(
+        # Call GPT-4 API using the new client format
+        response = client.chat.completions.create(
             model="gpt-4",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.0,  # Set temperature to 0 to reduce randomness
             max_tokens=150
         )
-        return response["choices"][0]["message"]["content"]
+        return response.choices[0].message.content
     except Exception as e:
         print("Error during GPT-4 evaluation:", e)
         return None
@@ -107,8 +108,8 @@ def main():
                         help="OpenAI API key to access GPT-4 evaluation.")
     args = parser.parse_args()
 
-    # Set OpenAI API key
-    openai.api_key = args.api_key
+    # Set up OpenAI client with the new API format
+    client = openai.OpenAI(api_key=args.api_key)
 
     # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.base_model)
@@ -185,12 +186,12 @@ def main():
                 sample_orig_scores = []
                 for i in range(args.n_eval_repeat):
                     print(f"Evaluating sample for domain '{test_domain}' (repeat {i+1}/{args.n_eval_repeat})...")
-                    gpt4_result = evaluate_with_gpt4(instruction, response_ft, response_orig)
+                    gpt4_result = evaluate_with_gpt4(instruction, response_ft, response_orig, client)
                     # If the call fails, wait a few seconds and retry
                     retry_count = 0
                     while gpt4_result is None and retry_count < 3:
                         time.sleep(5)
-                        gpt4_result = evaluate_with_gpt4(instruction, response_ft, response_orig)
+                        gpt4_result = evaluate_with_gpt4(instruction, response_ft, response_orig, client)
                         retry_count += 1
                     if gpt4_result is None:
                         print("Skipping this evaluation due to repeated errors.")
