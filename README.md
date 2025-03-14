@@ -4,7 +4,7 @@ Currently we have implemented some baseline approaches for domain-specific fine-
 
 ## Overview
 
-This mid-way project consists of three main components:
+This midway project consists of three main components:
 
 1. **Data Allocation**: Partitioning datasets by category into training and test sets.
 2. **Baseline: Domain-Specific Fine-Tuning**: Training LoRA adapters for each domain.
