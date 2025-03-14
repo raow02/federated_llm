@@ -55,7 +55,7 @@ python evaluation.py --domain brainstorming classification summarization
 ## Future Work
 
 This repository currently implements a baseline approach. Future work will include:
+- A sequential training baseline to demonstrate catastrophic forgetting issues 
 - Proposed federated learning approach for cross-domain knowledge sharing
 - Model aggregation strategies
-- Privacy-preserving techniques
 - Advanced evaluation metrics
